@@ -1,0 +1,20 @@
+{
+  "name": "nuvora-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "pg": "^8.23.1",
+    "socket.io": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
