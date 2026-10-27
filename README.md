@@ -4,7 +4,7 @@ API Node.js para os canais, mensagens, presença e sinalização das chamadas Nu
 
 ## Publicar sem plano pago
 
-1. Na Vercel, importe `hunterzyro-source/nuvoraapi` como um novo projeto. Use **Framework Preset: Other** e **Root Directory: `./`**. A pasta `public/` contém uma página simples de status; as funções da API ficam em `api/`.
+1. Na Vercel, importe `hunterzyro-source/nuvoraapi` como um novo projeto. Use **Framework Preset: Other** e **Root Directory: `./`**. O comando de compilação gera uma página simples em `public/`; as funções da API ficam em `api/`.
 2. Em **Storage**, conecte um banco Neon no plano gratuito. A integração da Vercel configura `DATABASE_URL`.
 3. Crie um banco Redis gratuito no Upstash. Copie a URL de conexão TCP (`rediss://...`) e cadastre-a na Vercel como `REDIS_URL`.
 4. Em **Environment Variables** do projeto da API, defina `COMMUNITY_PASSWORD` e `CORS_ORIGIN` com o domínio do site Nuvora na Vercel. Só compartilhe o código da comunidade com os participantes.

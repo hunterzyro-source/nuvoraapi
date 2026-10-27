@@ -1,4 +1,14 @@
-<!doctype html>
+import { mkdir, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+
+const checks = ['api/[...route].js', 'server/app.js', 'server/database.js'];
+for (const file of checks) {
+  const result = spawnSync(process.execPath, ['--check', file], { stdio: 'inherit' });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+await mkdir('public', { recursive: true });
+await writeFile('public/index.html', `<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8">
@@ -22,3 +32,5 @@
     </main>
   </body>
 </html>
+`, 'utf8');
+console.log('API validada e diretório public gerado.');
