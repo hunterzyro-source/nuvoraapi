@@ -152,9 +152,13 @@ io.on('connection', socket => {
     broadcastPresence();
   });
 
-  socket.on('channel:join', id => {
-    for (const room of socket.rooms) if (room.startsWith('channel:')) socket.leave(room);
-    if (id) socket.join(`channel:${id}`);
+  socket.on('channel:join', async id => {
+    const oldRooms = [...socket.rooms].filter(room => room.startsWith('channel:'));
+    await Promise.all(oldRooms.map(room => socket.leave(room)));
+    if (id) {
+      await socket.join(`channel:${id}`);
+      socket.emit('channel:joined', id);
+    }
   });
 
   socket.on('call:join', async ({ channel, name } = {}) => {
@@ -167,7 +171,8 @@ io.on('connection', socket => {
       .filter(peer => peer.id !== socket.id)
       .map(peer => ({ id: peer.id, name: peer.data.name || 'Participante' }));
     socket.emit('call:peers', peers);
-    await broadcastRoster(channel);
+    const roster = [...peers, { id: socket.id, name: socket.data.name }];
+    io.to(`call:${channel}`).emit('call:roster', roster);
   });
 
   socket.on('call:leave', async channel => {
