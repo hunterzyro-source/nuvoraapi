@@ -1,20 +1,34 @@
-# Nuvora API
+# Nuvora API — Node.js na Vercel
 
-API Node.js independente para canais, mensagens, presença e sinalização de chamadas do Nuvora. Usa Socket.IO para atualizações em tempo real e PostgreSQL para compartilhar dados entre todos os participantes. A voz, o vídeo e a tela usam WebRTC diretamente entre os participantes.
+API Node.js para os canais, mensagens, presença e sinalização das chamadas Nuvora. O endpoint Socket.IO fica em `/api/socket.io`; PostgreSQL guarda os dados e Redis compartilha presença e eventos entre instâncias.
 
-## Publicação
+## Publicar sem plano pago
 
-1. No Render, use **New → Blueprint** e escolha `hunterzyro-source/nuvoraapi`. O `render.yaml` cria um servidor WebSocket sempre ativo e PostgreSQL persistente; revise os recursos e custos antes de confirmar.
-2. Defina `COMMUNITY_PASSWORD` no Render com um código forte e compartilhe-o somente com seus participantes.
-3. Quando o Render mostrar a URL HTTPS, confirme `https://<url-da-api>/health`. A resposta deve incluir `"storage":"postgres"`.
-4. No projeto do site na Vercel, defina `VITE_API_URL` com essa URL pública HTTPS sem barra final e faça novo deploy do frontend.
+1. Na Vercel, importe `hunterzyro-source/nuvoraapi` como um novo projeto. Use **Framework Preset: Other**, **Root Directory: `./`**, **Build Command: `npm run build`** e deixe o diretório de saída vazio.
+2. Em **Storage**, conecte um banco Neon no plano gratuito. A integração da Vercel configura `DATABASE_URL`.
+3. Crie um banco Redis gratuito no Upstash. Copie a URL de conexão TCP (`rediss://...`) e cadastre-a na Vercel como `REDIS_URL`.
+4. Em **Environment Variables** do projeto da API, defina `COMMUNITY_PASSWORD` e `CORS_ORIGIN` com o domínio do site Nuvora na Vercel. Só compartilhe o código da comunidade com os participantes.
+5. Publique o projeto da API e abra `https://<url-da-api>/api/health`. Confirme `"database":"postgres"` e `"sharedRealtime":true`.
+6. No projeto Vercel do site Nuvora, defina `VITE_API_URL` como a URL HTTPS do projeto da API, sem barra final, e publique o site de novo.
 
-O domínio Vercel conhecido já está configurado em `CORS_ORIGIN`. Se o site usar outro domínio, atualize essa variável no Render para o domínio exato antes de usar a API. Para mais de um domínio, separe-os com vírgulas. `COMMUNITY_PASSWORD` protege a API e as conexões Socket.IO; os participantes digitam o mesmo código na tela de entrada do site.
+As Functions da Vercel Hobby têm duração máxima de 300 segundos para a conexão WebSocket. O app reconecta e reentra nos canais e chamadas automaticamente; pode haver uma breve interrupção quando a conexão reinicia. O Redis precisa estar conectado para que participantes em instâncias diferentes recebam os mesmos eventos.
+
+## Variáveis da API
+
+| Variável | Uso |
+| --- | --- |
+| `DATABASE_URL` | URL PostgreSQL fornecida pelo Neon |
+| `REDIS_URL` | URL Redis TCP/TLS do Upstash, no formato `rediss://...` |
+| `COMMUNITY_PASSWORD` | Código compartilhado de acesso à comunidade |
+| `CORS_ORIGIN` | Domínio exato do frontend Vercel |
+| `PUBLIC_APP_URL` | URL pública do frontend (opcional) |
+
+Não coloque credenciais de banco ou Redis em `VITE_*`, no código do frontend ou em commits.
 
 ## Execução local
 
-Use Node.js 20 ou mais recente, rode `npm install` e depois `npm start`. Sem `DATABASE_URL`, os dados são guardados em SQLite local. Com `DATABASE_URL`, o servidor inicializa e usa PostgreSQL. `/health` indica o armazenamento ativo.
+Use Node.js 20 ou mais recente, configure as variáveis acima e execute `npm install` seguido de `npm start`. `npm run build` verifica a sintaxe das Functions. Em produção, mantenha somente uma publicação da API conectada ao mesmo Neon e Upstash.
 
-## Limites das chamadas
+## Voz, vídeo e tela
 
-O servidor encaminha a sinalização inicial; o áudio e o vídeo fluem diretamente entre os navegadores para reduzir atraso. Isso atende melhor chamadas pequenas. Para redes que bloqueiam conexões diretas, adicione TURN; para grupos maiores, é necessário um SFU.
+O backend troca eventos de sinalização; voz, câmera e tela seguem diretamente entre os navegadores via WebRTC. Chamadas mesh funcionam melhor em grupos pequenos. O navegador pode precisar reconectar a sinalização periodicamente por causa do limite de duração das Functions.
