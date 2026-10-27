@@ -11,6 +11,9 @@
     "api/members/[name].js": {
       "maxDuration": 300
     },
+    "api/rtc/ice-servers.js": {
+      "maxDuration": 60
+    },
     "api/socket.io.js": {
       "maxDuration": 300
     },
