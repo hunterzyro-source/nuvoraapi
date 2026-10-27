@@ -48,6 +48,7 @@ app.get('/api/health', async (req, res) => {
     ok: healthy,
     database: database.status === 'fulfilled' ? 'postgres' : 'unavailable',
     sharedRealtime: realtime.status === 'fulfilled' ? Boolean(realtime.value) : false,
+    mediaRelayConfigured: Boolean(process.env.CLOUDFLARE_TURN_KEY_ID && process.env.CLOUDFLARE_TURN_API_TOKEN),
     ...(realtime.status === 'rejected' ? { realtimeError: 'Redis indisponível; confira REDIS_URL.' } : {}),
     ...(database.status === 'rejected' ? { databaseError: 'PostgreSQL indisponível; confira DATABASE_URL.' } : {}),
   });
@@ -74,6 +75,33 @@ app.use('/api', async (req, res, next) => {
     next();
   } catch (error) {
     next(error);
+  }
+});
+
+
+app.get('/api/rtc/ice-servers', async (req, res) => {
+  const turnKeyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+  const turnApiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+  if (!turnKeyId || !turnApiToken) {
+    return res.json({ iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }], relay: false });
+  }
+  try {
+    const response = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turnKeyId)}/credentials/generate-ice-servers`,
+      { method: 'POST', headers: { Authorization: `Bearer ${turnApiToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ttl: 43_200 }) },
+    );
+    if (!response.ok) {
+      console.error('Falha ao gerar credenciais TURN:', response.status);
+      return res.status(503).json({ error: 'Não foi possível preparar a conexão de mídia.' });
+    }
+    const { iceServers } = await response.json();
+    if (!Array.isArray(iceServers) || !iceServers.some(server => (Array.isArray(server.urls) ? server.urls : [server.urls]).some(url => String(url).startsWith('turn:') || String(url).startsWith('turns:')))) {
+      return res.status(502).json({ error: 'O serviço de mídia não retornou um relay válido.' });
+    }
+    res.json({ iceServers, relay: true });
+  } catch (error) {
+    console.error('Falha ao consultar TURN:', error.message);
+    res.status(503).json({ error: 'Serviço de conexão de mídia indisponível.' });
   }
 });
 
@@ -163,21 +191,37 @@ io.on('connection', socket => {
     if (id) {
       await socket.join(`channel:${id}`);
       socket.emit('channel:joined', id);
+      const peers = await io.in(`call:${id}`).fetchSockets();
+      socket.emit('call:roster', { channel: id, members: peers.map(peer => ({ id: peer.id, channel: id, name: peer.data.name || 'Participante', ...peer.data.media })) });
     }
   });
 
-  socket.on('call:join', async ({ channel, name } = {}) => {
-    if (!channel) return;
-    socket.data.name = name || 'Visitante';
+  socket.on('call:join', async ({ channel, name } = {}, acknowledge) => {
+    if (!channel) return acknowledge?.({ error: 'Canal de voz inválido.' });
+    const previousChannel = socket.data.callChannel;
+    if (previousChannel && previousChannel !== channel) {
+      socket.to(`call:${previousChannel}`).emit('call:peer-left', { id: socket.id });
+      await socket.leave(`call:${previousChannel}`);
+      await broadcastRoster(previousChannel);
+    }
+    socket.data.name = String(name || 'Visitante').slice(0, 32);
     socket.data.callChannel = channel;
     await socket.join(`call:${channel}`);
     socket.to(`call:${channel}`).emit('call:peer-joined', { id: socket.id, name: socket.data.name });
     const peers = (await io.in(`call:${channel}`).fetchSockets())
       .filter(peer => peer.id !== socket.id)
-      .map(peer => ({ id: peer.id, name: peer.data.name || 'Participante' }));
+      .map(peer => ({ id: peer.id, channel, name: peer.data.name || 'Participante', ...peer.data.media }));
     socket.emit('call:peers', peers);
-    const roster = [...peers, { id: socket.id, name: socket.data.name }];
-    io.to(`call:${channel}`).emit('call:roster', roster);
+    const roster = [...peers, { id: socket.id, channel, name: socket.data.name, ...socket.data.media }];
+    io.emit('call:roster', { channel, members: roster });
+    acknowledge?.(roster);
+  });
+
+  socket.on('call:media-state', state => {
+    const channel = socket.data.callChannel;
+    if (!channel) return;
+    socket.data.media = { muted: Boolean(state?.muted), camera: Boolean(state?.camera), sharing: Boolean(state?.sharing) };
+    broadcastRoster(channel);
   });
 
   socket.on('call:leave', async channel => {
@@ -206,7 +250,7 @@ io.on('connection', socket => {
 
 async function broadcastRoster(channel) {
   const peers = await io.in(`call:${channel}`).fetchSockets();
-  io.to(`call:${channel}`).emit('call:roster', peers.map(peer => ({ id: peer.id, name: peer.data.name || 'Participante' })));
+  io.emit('call:roster', { channel, members: peers.map(peer => ({ id: peer.id, channel, name: peer.data.name || 'Participante', ...peer.data.media })) });
 }
 
 async function broadcastPresence() {
