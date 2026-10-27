@@ -50,7 +50,7 @@ app.get('/api/health', async (req, res) => {
     sharedRealtime: realtime.status === 'fulfilled' ? Boolean(realtime.value) : false,
     mediaRelayConfigured: Boolean(process.env.CLOUDFLARE_TURN_KEY_ID && process.env.CLOUDFLARE_TURN_API_TOKEN),
     ...(realtime.status === 'rejected' ? { realtimeError: 'Redis indisponível; confira REDIS_URL.' } : {}),
-    ...(database.status === 'rejected' ? { databaseError: 'PostgreSQL indisponível; confira DATABASE_URL.' } : {}),
+    ...(database.status === 'rejected' ? { databaseError: database.reason?.code || 'POSTGRES_CONNECTION_FAILED' } : {}),
   });
 });
 
@@ -70,6 +70,7 @@ app.use('/api', async (req, res, next) => {
   if (communityPassword && req.get('authorization') !== `Bearer ${communityPassword}`) {
     return res.status(401).json({ error: 'Acesso restrito. Informe o código da comunidade.' });
   }
+  if (req.path === '/rtc/ice-servers') return next();
   try {
     await databaseReady;
     next();
