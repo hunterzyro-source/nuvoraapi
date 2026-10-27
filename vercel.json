@@ -4,6 +4,18 @@
   "functions": {
     "api/[...route].js": {
       "maxDuration": 300
+    },
+    "api/messages/[channel].js": {
+      "maxDuration": 300
+    },
+    "api/members/[name].js": {
+      "maxDuration": 300
+    },
+    "api/socket.io.js": {
+      "maxDuration": 300
+    },
+    "api/socket.io/[...path].js": {
+      "maxDuration": 300
     }
   }
 }
