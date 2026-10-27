@@ -9,7 +9,9 @@ import { databaseReady, pool } from './database.js';
 
 const app = express();
 const server = createServer(app);
-const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean);
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',')
+  .map(value => value.trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/g, ''))
+  .filter(Boolean);
 const corsOrigin = allowedOrigins.length ? allowedOrigins : true;
 const communityPassword = process.env.COMMUNITY_PASSWORD || '';
 const redisUrl = process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL || '';
