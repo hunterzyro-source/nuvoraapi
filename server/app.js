@@ -39,13 +39,18 @@ const redisReady = (async () => {
 redisReady.catch(error => console.error('Não foi possível conectar ao Redis compartilhado:', error.message));
 
 app.get('/api/health', async (req, res) => {
-  try {
-    await databaseReady;
-    await pool.query('SELECT 1');
-    res.json({ ok: true, database: 'postgres', sharedRealtime: await redisReady });
-  } catch (error) {
-    res.status(503).json({ ok: false, error: 'Banco ou Redis indisponível.' });
-  }
+  const [database, realtime] = await Promise.allSettled([
+    databaseReady.then(() => pool.query('SELECT 1')),
+    redisReady,
+  ]);
+  const healthy = database.status === 'fulfilled' && realtime.status === 'fulfilled' && realtime.value;
+  res.status(healthy ? 200 : 503).json({
+    ok: healthy,
+    database: database.status === 'fulfilled' ? 'postgres' : 'unavailable',
+    sharedRealtime: realtime.status === 'fulfilled' ? Boolean(realtime.value) : false,
+    ...(realtime.status === 'rejected' ? { realtimeError: 'Redis indisponível; confira REDIS_URL.' } : {}),
+    ...(database.status === 'rejected' ? { databaseError: 'PostgreSQL indisponível; confira DATABASE_URL.' } : {}),
+  });
 });
 
 app.get('/api/session', (req, res) => {
